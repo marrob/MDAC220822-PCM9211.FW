@@ -1,0 +1,18 @@
+Debug/*
+Release/*
+*.bat
+*.Margit Róbert
+*.uvopt
+*.bak
+*.dep
+*.sdf
+*.suo
+*.filters
+*.user
+*.opensdf
+*.tmp
+
+/Debug/
+
+stm32cubeide.project.prefs
+language.settings.xml
