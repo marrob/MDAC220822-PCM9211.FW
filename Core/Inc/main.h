@@ -34,7 +34,7 @@ extern "C" {
 #include "common.h"
 #include "vt100.h"
 #include "src4193.h"
-
+#include "pcm9211.h"
 //#include "wm8805.h"
 #include "dac_bd34.h"
 /* USER CODE END Includes */
@@ -61,6 +61,10 @@ extern "C" {
 #define DEVICE_MNF              "KONVOLUCIO"
 #define DEVICE_MNF_SIZE         sizeof(DEVICE_MNF)
 
+
+#define PCM9211_DEVICE_ADDRESS  0x86
+#define BD34_DEVICE_ADDRESS     0x38
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
@@ -73,12 +77,12 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define A0_USB_ISO_Pin GPIO_PIN_13
 #define A0_USB_ISO_GPIO_Port GPIOC
-#define LIVE_LED_Pin GPIO_PIN_14
-#define LIVE_LED_GPIO_Port GPIOC
+#define TIMEBASE_OUT_Pin GPIO_PIN_14
+#define TIMEBASE_OUT_GPIO_Port GPIOC
 #define DAC_MUTE_COM_Pin GPIO_PIN_15
 #define DAC_MUTE_COM_GPIO_Port GPIOC
-#define USART1_DIR_Pin GPIO_PIN_0
-#define USART1_DIR_GPIO_Port GPIOA
+#define FREQ_MEAS_LRCK_Pin GPIO_PIN_0
+#define FREQ_MEAS_LRCK_GPIO_Port GPIOA
 #define RESET_Pin GPIO_PIN_1
 #define RESET_GPIO_Port GPIOA
 #define EN_USB_ISO_Pin GPIO_PIN_2
@@ -87,32 +91,30 @@ void Error_Handler(void);
 #define RDY_SRC_GPIO_Port GPIOA
 #define SPI1_NSS_Pin GPIO_PIN_4
 #define SPI1_NSS_GPIO_Port GPIOA
-#define FREQ_MUX_SEL_Pin GPIO_PIN_6
-#define FREQ_MUX_SEL_GPIO_Port GPIOA
+#define USART1_DIR_Pin GPIO_PIN_6
+#define USART1_DIR_GPIO_Port GPIOA
 #define RATIO_SRC_Pin GPIO_PIN_0
 #define RATIO_SRC_GPIO_Port GPIOB
 #define EN_I2S_I2C_ISO_Pin GPIO_PIN_1
 #define EN_I2S_I2C_ISO_GPIO_Port GPIOB
 #define RESET_SPDIF_Pin GPIO_PIN_2
 #define RESET_SPDIF_GPIO_Port GPIOB
-#define SPI2_NSS_Pin GPIO_PIN_12
-#define SPI2_NSS_GPIO_Port GPIOB
-#define SPI2_SCK_Pin GPIO_PIN_13
-#define SPI2_SCK_GPIO_Port GPIOB
-#define SPI2_MISO_Pin GPIO_PIN_14
-#define SPI2_MISO_GPIO_Port GPIOB
-#define SPI2_MOSI_Pin GPIO_PIN_15
-#define SPI2_MOSI_GPIO_Port GPIOB
+#define NON_PCM_Pin GPIO_PIN_12
+#define NON_PCM_GPIO_Port GPIOB
+#define ERROR_SPDIF_Pin GPIO_PIN_13
+#define ERROR_SPDIF_GPIO_Port GPIOB
+#define LIVE_LED_Pin GPIO_PIN_14
+#define LIVE_LED_GPIO_Port GPIOB
+#define PCM_DET_Pin GPIO_PIN_15
+#define PCM_DET_GPIO_Port GPIOB
 #define A1_USB_ISO_Pin GPIO_PIN_8
 #define A1_USB_ISO_GPIO_Port GPIOA
 #define A2_USB_ISO_Pin GPIO_PIN_11
 #define A2_USB_ISO_GPIO_Port GPIOA
-#define FREQ_MEAS_Pin GPIO_PIN_12
-#define FREQ_MEAS_GPIO_Port GPIOA
+#define FREQ_MEAS_BCLK_Pin GPIO_PIN_12
+#define FREQ_MEAS_BCLK_GPIO_Port GPIOA
 #define EN_SPDIF_ISO_Pin GPIO_PIN_15
 #define EN_SPDIF_ISO_GPIO_Port GPIOA
-#define A3_USB_ISO_Pin GPIO_PIN_3
-#define A3_USB_ISO_GPIO_Port GPIOB
 #define MUX_PCM_Pin GPIO_PIN_4
 #define MUX_PCM_GPIO_Port GPIOB
 #define DSD_PCM_USB_ISO_Pin GPIO_PIN_5

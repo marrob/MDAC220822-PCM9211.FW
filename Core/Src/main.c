@@ -95,16 +95,14 @@ typedef struct _DacParams_t{
 
 typedef enum _Xtatus_t{
   XMOS_UNKNOWN = 0xFF,
-  XMOS_PCM_44_1KHZ = 0x1F,
-  XMOS_PCM_48_0KHZ = 0x1E,
-  XMOS_PCM_88_2KHZ = 0x1D,
-  XMOS_PCM_96_0KHZ = 0x1C,
-  XMOS_PCM_176_4KHZ = 0x1B,
-  XMOS_PCM_192_KHZ = 0x1A,
-  XMOS_PCM_352_8KHZ = 0x19,
-  XMOS_PCM_384_KHZ = 0x18,
-  XMOS_DSD64_DOP = 0x0A,
-  XMOS_DSD128_DOP = 0x08,
+  XMOS_PCM_44_1KHZ = 0x17,
+  XMOS_PCM_48_0KHZ = 0x16,
+  XMOS_PCM_88_2KHZ = 0x15,
+  XMOS_PCM_96_0KHZ = 0x14,
+  XMOS_PCM_176_4KHZ = 0x13,
+  XMOS_PCM_192_KHZ = 0x12,
+  XMOS_PCM_352_8KHZ = 0x11,
+  XMOS_PCM_384_KHZ = 0x10,
   XMOS_DSD_64 = 0x02,
   XMOS_DSD_128 = 0x00,
   XMOS_DSD_256 = 0x04
@@ -269,6 +267,7 @@ typedef struct _AppTypeDef
     uint8_t XmosMuteSignaledCnt;
     uint8_t DacReConfgiurationCnt;
     uint32_t SpdifAuidoTypeChangedCnt;
+    PCM9211_Frequencies_t PCM9211SamplingFreq;
   }Diag;
 
   DebugState_t DebugState;
@@ -294,14 +293,20 @@ typedef struct _AppTypeDef
 
 
 /*** FrMeter ***/
-#define FRMETER_TIM_TIMEBASE TIM2
-#define FRMETER_TIM_COUNTER TIM1
+#define FRMETER_TIM_TIMEBASE      TIM3
+#define FRMETER_TIM_LRCK_COUNTER  TIM2
+#define FRMETER_TIM_BCLK_COUNTER  TIM1
 
-#define FrMeterTimebaseItEnable() __HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE)
-#define FreqMeterTimebaseStart()   __HAL_TIM_ENABLE(&htim2)
-#define FreqMeterCoutnerStart()    __HAL_TIM_ENABLE(&htim1)
-#define FreqMeterCounterValue      FRMETER_TIM_COUNTER->CNT
-#define FreqMeterTimebaseValue     FRMETER_TIM_TIMEBASE->CNT
+#define FrMeterTimebaseItEnable()     __HAL_TIM_ENABLE_IT(&htim3, TIM_IT_UPDATE)
+#define FreqMeterTimebaseStart()      __HAL_TIM_ENABLE(&htim3)
+#define FreqMeterTimebaseValue        FRMETER_TIM_TIMEBASE->CNT
+
+#define FreqMeterLrckCoutnerStart()    __HAL_TIM_ENABLE(&htim2)
+#define FreqMeterLrckCounterValue     FRMETER_TIM_LRCK_COUNTER->CNT
+
+#define FreqMeterBclkCoutnerStart()    __HAL_TIM_ENABLE(&htim1)
+#define FreqMeterBclkCounterValue     FRMETER_TIM_BCLK_COUNTER->CNT
+
 
 /*** DIO ***/
 #define DO_EN_I2S_I2C_ISO         ((uint8_t)1<<1)
@@ -327,12 +332,12 @@ typedef struct _AppTypeDef
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
-I2C_HandleTypeDef hi2c2;
 
 SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef hdma_usart1_rx;
@@ -375,12 +380,12 @@ DacParameters_t DacConfigurations[] = {
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
-static void MX_I2C2_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /*** LiveLed ***/
@@ -456,12 +461,12 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_I2C2_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_I2C1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   /*** Check if the system has resumed from WWDG reset ***/
@@ -480,10 +485,9 @@ int main(void)
 
   /*** FrMeter ***/
   FrMeterStart();
-  //!!! WmInit();
-  DacBD34Init( &hi2c1);
 
-
+  PCM9211_Init(&hi2c1, PCM9211_DEVICE_ADDRESS);
+  DacBD34Init(&hi2c1, BD34_DEVICE_ADDRESS);
 
   /*** SRC ***/
   /*
@@ -520,17 +524,30 @@ int main(void)
   /*** Defualt ***/
   Device.Route.Pre = ROUTE_NONE_DAC;
   //Device.Route.Curr = ROUTE_MUTE_DAC;
-  Device.Route.Curr = ROUTE_HDMI_DAC;
+  Device.Route.Curr = ROUTE_RCA_DAC;
   Device.DacAudioFormat = DAC_PCM_44_1KHZ;
   Device.MasterClock = CLK_22_5792MHZ;
   Device.XmosStatus.Pre = XMOS_UNKNOWN;
 
+  Device.Volume.Curr = 100;
+
   /*** Everything is Off ***/
+  /*
   HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
   HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); // USB Input Off
   HAL_GPIO_WritePin(EN_SPDIF_ISO_GPIO_Port, EN_SPDIF_ISO_Pin, GPIO_PIN_RESET); // SPDIF Input Off
   HAL_GPIO_WritePin(MUX_PCM_GPIO_Port, MUX_PCM_Pin, GPIO_PIN_SET); //SRC Off
   HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_RESET); // Mute Off
+  */
+
+  /*** Nincs némitva és USB-XMOS a bement van kiválaszva SRC bypass ***/
+  HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
+  HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); // USB Input Off
+  HAL_GPIO_WritePin(EN_SPDIF_ISO_GPIO_Port, EN_SPDIF_ISO_Pin, GPIO_PIN_RESET); // SPDIF Input Off
+  HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_SET); //U121
+  //HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_SET); // Mute Off
+
+  HAL_GPIO_WritePin(MUX_PCM_GPIO_Port, MUX_PCM_Pin, GPIO_PIN_SET); //HW SRC Bypass ON
 
 
   /* USER CODE END 2 */
@@ -551,7 +568,6 @@ int main(void)
     // 44.1KHz  -   48.0KHz   |   64xLRCK
 
     /*
-     *
      * - Az XLR, HDMI, RCA-ról érkező jelek vezérlik a DAC-ot
      * - A LRCK-BCK mért frekvenciák alapján meghatározom audió jel tipusát pl: AUDIO_PCM_44_1KHZ
      * - Ha pl AUDIO_PCM_44_1KHZ - jön akkor 22.5792MHz a Master Clock kell neki
@@ -652,7 +668,6 @@ int main(void)
          DacSoftRstOn();
          Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
          DacSetParams(&DacConfigurations[Device.DacAudioFormatToBeSet], Device.MasterClock);
-        // DelayMs(1);
          DacSoftRstOff();
          /*** DAC Mute Off ***/
          DacBD34RegWrite(0x2A, 0x03);
@@ -750,11 +765,8 @@ int main(void)
     }
 
     /*
-     * Ezt nem tudom mikor használja a DAC csip...
-     * és hogy egyáltalán használja-e.
-     * Ha ez nem hasznos, akkor töröld...
      *
-     * Ezt lázszólag mindig használja a DAC
+     * Ezt látszólag mindig használja az XMOS szám váltáskor.
      *
      * de DSD->PCM váltáskor a sistergést nem nyomja el.
      */
@@ -870,7 +882,7 @@ int main(void)
 
       Device.SrcConfig.Pre = Device.SrcConfig.Curr;
     }
-
+#if  offf
     /*
      * ***************** CustomDacConfig  ********************************
      * 31:     LR Swap 1:LR Swap, 0:No Swap
@@ -1046,9 +1058,11 @@ int main(void)
       DelayMs(5);
       Device.CustomDacConfig.Pre = Device.CustomDacConfig.Curr;
     }
+#endif
 
-    ///!!! WmTask();
-    DebugTask(Device.DebugState);
+   DebugTask(Device.DebugState);
+
+   Device.Diag.PCM9211SamplingFreq = PCM9211_SamplingFreq();
 
 
 #if DAC_AUDIO_FORMAT_DEBUG
@@ -1069,6 +1083,7 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
+
 
 /**
   * @brief System Clock Configuration
@@ -1144,40 +1159,6 @@ static void MX_I2C1_Init(void)
 }
 
 /**
-  * @brief I2C2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C2_Init(void)
-{
-
-  /* USER CODE BEGIN I2C2_Init 0 */
-
-  /* USER CODE END I2C2_Init 0 */
-
-  /* USER CODE BEGIN I2C2_Init 1 */
-
-  /* USER CODE END I2C2_Init 1 */
-  hi2c2.Instance = I2C2;
-  hi2c2.Init.ClockSpeed = 100;
-  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c2.Init.OwnAddress1 = 0;
-  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c2.Init.OwnAddress2 = 0;
-  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C2_Init 2 */
-
-  /* USER CODE END I2C2_Init 2 */
-
-}
-
-/**
   * @brief SPI1 Initialization Function
   * @param None
   * @retval None
@@ -1227,7 +1208,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 0 */
 
-  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
@@ -1244,12 +1225,11 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;
-  sSlaveConfig.InputTrigger = TIM_TS_ETRF;
-  sSlaveConfig.TriggerPolarity = TIM_TRIGGERPOLARITY_NONINVERTED;
-  sSlaveConfig.TriggerPrescaler = TIM_TRIGGERPRESCALER_DIV1;
-  sSlaveConfig.TriggerFilter = 0;
-  if (HAL_TIM_SlaveConfigSynchro(&htim1, &sSlaveConfig) != HAL_OK)
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_ETRMODE2;
+  sClockSourceConfig.ClockPolarity = TIM_CLOCKPOLARITY_NONINVERTED;
+  sClockSourceConfig.ClockPrescaler = TIM_CLOCKPRESCALER_DIV1;
+  sClockSourceConfig.ClockFilter = 0;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -1284,16 +1264,19 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 8;
+  htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 53400;
+  htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
   }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_ETRMODE2;
+  sClockSourceConfig.ClockPolarity = TIM_CLOCKPOLARITY_NONINVERTED;
+  sClockSourceConfig.ClockPrescaler = TIM_CLOCKPRESCALER_DIV1;
+  sClockSourceConfig.ClockFilter = 0;
   if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
   {
     Error_Handler();
@@ -1307,6 +1290,51 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 7;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 60000;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
@@ -1381,23 +1409,23 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LIVE_LED_GPIO_Port, LIVE_LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(TIMEBASE_OUT_GPIO_Port, TIMEBASE_OUT_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, USART1_DIR_Pin|EN_USB_ISO_Pin|FREQ_MUX_SEL_Pin|EN_SPDIF_ISO_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, RESET_Pin|SPI1_NSS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, EN_I2S_I2C_ISO_Pin|RESET_SPDIF_Pin|SPI2_NSS_Pin|SPI2_MOSI_Pin
-                          |MUX_PCM_Pin|MCLK_SEL_ISO_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, EN_USB_ISO_Pin|USART1_DIR_Pin|EN_SPDIF_ISO_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SPI2_SCK_Pin|MUTE_USB_ISO_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, EN_I2S_I2C_ISO_Pin|LIVE_LED_Pin|PCM_DET_Pin|MUX_PCM_Pin
+                          |MCLK_SEL_ISO_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, RESET_SPDIF_Pin|MUTE_USB_ISO_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : A0_USB_ISO_Pin */
   GPIO_InitStruct.Pin = A0_USB_ISO_Pin;
@@ -1405,12 +1433,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(A0_USB_ISO_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LIVE_LED_Pin */
-  GPIO_InitStruct.Pin = LIVE_LED_Pin;
+  /*Configure GPIO pin : TIMEBASE_OUT_Pin */
+  GPIO_InitStruct.Pin = TIMEBASE_OUT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LIVE_LED_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(TIMEBASE_OUT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : DAC_MUTE_COM_Pin */
   GPIO_InitStruct.Pin = DAC_MUTE_COM_Pin;
@@ -1419,17 +1447,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(DAC_MUTE_COM_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : USART1_DIR_Pin EN_USB_ISO_Pin FREQ_MUX_SEL_Pin EN_SPDIF_ISO_Pin */
-  GPIO_InitStruct.Pin = USART1_DIR_Pin|EN_USB_ISO_Pin|FREQ_MUX_SEL_Pin|EN_SPDIF_ISO_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /*Configure GPIO pins : RESET_Pin SPI1_NSS_Pin */
   GPIO_InitStruct.Pin = RESET_Pin|SPI1_NSS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : EN_USB_ISO_Pin USART1_DIR_Pin EN_SPDIF_ISO_Pin */
+  GPIO_InitStruct.Pin = EN_USB_ISO_Pin|USART1_DIR_Pin|EN_SPDIF_ISO_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -1445,27 +1473,38 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(RATIO_SRC_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EN_I2S_I2C_ISO_Pin RESET_SPDIF_Pin SPI2_NSS_Pin SPI2_SCK_Pin
-                           MUX_PCM_Pin MCLK_SEL_ISO_Pin */
-  GPIO_InitStruct.Pin = EN_I2S_I2C_ISO_Pin|RESET_SPDIF_Pin|SPI2_NSS_Pin|SPI2_SCK_Pin
-                          |MUX_PCM_Pin|MCLK_SEL_ISO_Pin;
+  /*Configure GPIO pins : EN_I2S_I2C_ISO_Pin LIVE_LED_Pin MUX_PCM_Pin MCLK_SEL_ISO_Pin */
+  GPIO_InitStruct.Pin = EN_I2S_I2C_ISO_Pin|LIVE_LED_Pin|MUX_PCM_Pin|MCLK_SEL_ISO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SPI2_MISO_Pin A3_USB_ISO_Pin DSD_PCM_USB_ISO_Pin */
-  GPIO_InitStruct.Pin = SPI2_MISO_Pin|A3_USB_ISO_Pin|DSD_PCM_USB_ISO_Pin;
+  /*Configure GPIO pin : RESET_SPDIF_Pin */
+  GPIO_InitStruct.Pin = RESET_SPDIF_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(RESET_SPDIF_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB10 PB11 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : NON_PCM_Pin ERROR_SPDIF_Pin DSD_PCM_USB_ISO_Pin */
+  GPIO_InitStruct.Pin = NON_PCM_Pin|ERROR_SPDIF_Pin|DSD_PCM_USB_ISO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SPI2_MOSI_Pin */
-  GPIO_InitStruct.Pin = SPI2_MOSI_Pin;
+  /*Configure GPIO pin : PCM_DET_Pin */
+  GPIO_InitStruct.Pin = PCM_DET_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SPI2_MOSI_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(PCM_DET_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : A1_USB_ISO_Pin A2_USB_ISO_Pin */
   GPIO_InitStruct.Pin = A1_USB_ISO_Pin|A2_USB_ISO_Pin;
@@ -1553,6 +1592,7 @@ AudioTypes_t GetAudioType()
    *
    *
    */
+  /*
   types[0] = types[1];
   types[1] = types[2];
   types[2] = result;
@@ -1565,6 +1605,7 @@ AudioTypes_t GetAudioType()
     }
   }
   pretype = result;
+  */
   return result;
 }
 /* DAC -----------------------------------------------------------------------*/
@@ -1704,41 +1745,39 @@ void DacCustomConfigPrint(DacParameters_t *params)
 /* FrMeter -------------------------------------------------------------------*/
 void FrMeterStart(void)
 {
-  FreqMeterCounterValue = 0;
+  FreqMeterLrckCounterValue = 0;
+  FreqMeterBclkCounterValue = 0;
+
   FreqMeterTimebaseValue = 0;
   FreqMeterTimebaseStart();
-  FreqMeterCoutnerStart();
+  FreqMeterLrckCoutnerStart();
+  FreqMeterBclkCoutnerStart();
   FrMeterTimebaseItEnable();
 }
 
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-    static uint8_t isBCLK;
    if(htim->Instance == FRMETER_TIM_TIMEBASE)
    {
-     if(isBCLK)
-     {
-       Device.Meas.FreqBCLK_MHz = FreqMeterCounterValue * 100 * 10;
-     }
-     else
-     {
-       Device.Meas.FreqLRCK_MHz = FreqMeterCounterValue * 100;
-     }
-     isBCLK = !isBCLK;
-     if(isBCLK)
-       FreqMeasSourceBCLK();
-     else
-       FreqMeasSourceLRCK();
-     FreqMeterCounterValue = 0;
+     Device.Meas.FreqBCLK_MHz = (FreqMeterBclkCounterValue) * 100 * 10;
+     Device.Meas.FreqLRCK_MHz = (FreqMeterLrckCounterValue) * 100;
+
+     FreqMeterBclkCounterValue = 0;
+     FreqMeterLrckCounterValue = 0;
+
      /*
       * Ezeket Timebase teszthez használd, ez mérési tartomány 100Hz-től 4MHz-ig használható
       * 10ms-es időalap estén pl a LIVE_LED-nél 20ms-es periódusidőt kell mérned
       * 2022.02.02 by marrob
-     HAL_GPIO_TogglePin(TIMEBASE_GPIO_Port, TIMEBASE_Pin);
-     HAL_GPIO_TogglePin(LIVE_LED_GPIO_Port, LIVE_LED_Pin);
-     */
+      */
+     HAL_GPIO_TogglePin(TIMEBASE_OUT_GPIO_Port, TIMEBASE_OUT_Pin);
+
    }
-   else if(htim->Instance == FRMETER_TIM_COUNTER)
+   else if(htim->Instance == FRMETER_TIM_LRCK_COUNTER)
+   {
+
+   }else if(htim->Instance == FRMETER_TIM_BCLK_COUNTER)
    {
 
    }
@@ -1778,7 +1817,7 @@ void SetRoute (Route_t route)
       HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
       HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); // USB Input Off
       HAL_GPIO_WritePin(EN_SPDIF_ISO_GPIO_Port, EN_SPDIF_ISO_Pin, GPIO_PIN_SET); // SPDIF Input On
-      ///!!! WmSelectInput(1);
+      PCM9211_SelectSource(PCM9211_RXIN1);
       HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_RESET); //Mute Off
       break;
     }
@@ -1786,7 +1825,7 @@ void SetRoute (Route_t route)
       HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
       HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); //USB Input Off
       HAL_GPIO_WritePin(EN_SPDIF_ISO_GPIO_Port, EN_SPDIF_ISO_Pin, GPIO_PIN_SET);//SPDIF Input On
-      /// !!! WmSelectInput(2);
+      PCM9211_SelectSource(PCM9211_RXIN0);
        HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_RESET); // Mute Off
       break;
     }
@@ -1794,7 +1833,7 @@ void SetRoute (Route_t route)
       HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
       HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); // USB Input Off
       HAL_GPIO_WritePin(EN_SPDIF_ISO_GPIO_Port, EN_SPDIF_ISO_Pin, GPIO_PIN_SET);// SPDIF Input On
-      ///!!!  WmSelectInput(0);
+      PCM9211_SelectSource(PCM9211_RXIN2);
       HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_RESET); // Mute Off
       break;
     }
@@ -1813,9 +1852,6 @@ XmosStatus_t ReadXmosStaus(void)
 
   if(HAL_GPIO_ReadPin(A2_USB_ISO_GPIO_Port, A2_USB_ISO_Pin) == GPIO_PIN_SET)
     status |= DI_A2_USB;
-
-  if(HAL_GPIO_ReadPin(A3_USB_ISO_GPIO_Port, A3_USB_ISO_Pin) == GPIO_PIN_SET)
-    status |= DI_A3_USB;
 
   if(HAL_GPIO_ReadPin(DSD_PCM_USB_ISO_GPIO_Port, DSD_PCM_USB_ISO_Pin) == GPIO_PIN_SET)
     status |= DI_DSD_PCM_USB;
@@ -1849,17 +1885,6 @@ void LiveLedOn(void)
 void LiveLedOff(void)
 {
   HAL_GPIO_WritePin(LIVE_LED_GPIO_Port, LIVE_LED_Pin, GPIO_PIN_RESET);
-}
-
-/* FreqMeas Source -----------------------------------------------------------*/
-void FreqMeasSourceLRCK(void)
-{
-  HAL_GPIO_WritePin(FREQ_MUX_SEL_GPIO_Port, FREQ_MUX_SEL_Pin, GPIO_PIN_SET);
-}
-
-void FreqMeasSourceBCLK(void)
-{
-  HAL_GPIO_WritePin(FREQ_MUX_SEL_GPIO_Port, FREQ_MUX_SEL_Pin, GPIO_PIN_RESET);
 }
 
 /* SRC ----------------------------------------------------------------------*/

@@ -13,11 +13,13 @@
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/
-I2C_HandleTypeDef *_I2C;
+static I2C_HandleTypeDef *_i2c;
+static uint8_t  _devAddress;
+static uint32_t _errorCounter;
 
 /* Private user code ---------------------------------------------------------*/
 
-uint8_t DacBD34Init(I2C_HandleTypeDef *i2c)
+uint8_t DacBD34Init(I2C_HandleTypeDef *i2c, uint8_t address)
 {
   /*
    * RHOM BD34301
@@ -26,7 +28,8 @@ uint8_t DacBD34Init(I2C_HandleTypeDef *i2c)
    * MCLK: 22.5792MHz
    * Be Careful: Alwayas be signal on the PCM inputs before RAM Clear... Fiugre 32...
    */
-  _I2C=i2c;
+  _i2c=i2c;
+  _devAddress = address;
 
 
   DacBD34RegWrite(0x04, 0x02); /*Clock 1*/
@@ -64,7 +67,10 @@ uint8_t DacBD34Init(I2C_HandleTypeDef *i2c)
 
 HAL_StatusTypeDef DacBD34RegWrite(uint8_t address, uint8_t data)
 {
-  return HAL_I2C_Mem_Write(_I2C, BD34_DEV_ADDRESS, address, BD34_ADDR_SIZE, (uint8_t[]){data}, 1, 100);
+  HAL_StatusTypeDef status = 0;
+  if((status = HAL_I2C_Mem_Write(_i2c, _devAddress, address, BD34_ADDR_SIZE, (uint8_t[]){data}, 1, BD34_TIMEOUT))!= HAL_OK)
+    _errorCounter++;
+  return status;
 }
 
 
