@@ -44,22 +44,6 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
-typedef struct _DacParams_t{
-  uint8_t Clock1;       /* 0x04 - MclkDiv[1:0] */
-  uint8_t Clock2;       /* 0x06 - PhaseAdj */
-  uint8_t AudioIf1;     /* 0x10 - DSD, MUTE, FMT, WLEN */
-  uint8_t AudioIf3;     /* 0x13 - LrSwap */
-  uint8_t DsdFilter;    /* 0x16 - DSD Filter */
-  uint8_t FirFilter1;   /* 0x30 - FirAlgo */
-  uint8_t FirFilter2;   /* 0x31 - FirCoef */
-  uint8_t DeEmph1;      /* 0x33 - DempFs[1:0]*/
-  uint8_t DeEmph2;      /* 0x34 - Demp1, Demp2*/
-  uint8_t DeltaSigma;   /* 0x40 - DsSettings, DsOsr[1:0]*/
-  uint8_t Settings5;    /* 0x60 - Magic*/
-  uint8_t Settings6;    /* 0x61 - Maigc*/
-}DacParameters_t;
-
 typedef enum _Xtatus_t{
   XMOS_UNKNOWN = 0xFF,
   XMOS_PCM_44_1KHZ = 0x17,
@@ -209,6 +193,8 @@ typedef struct _AppTypeDef
 
   uint32_t UpTimeSec;
 
+  uint8_t MuteByUser;
+
 
   DacAudioFormat_t DacAudioFormat;
   DacAudioFormat_t DacAudioFormatToBeSet;
@@ -288,7 +274,6 @@ typedef struct _AppTypeDef
 #define DI_DSD_PCM_USB            ((uint8_t)1<<4)
 #define DI_XMOS_MUTE              ((uint8_t)1<<5)
 
-//#define DAC_AUDIO_FORMAT_DEBUG
 
 /* USER CODE END PD */
 
@@ -319,28 +304,6 @@ char    UartRxBuffer[UART_BUFFER_SIZE];
 char    UartDmaBuffer[UART_DMA_BUFFER_SIZE];
 char    UartTxBuffer[UART_BUFFER_SIZE];
 __IO uint8_t UartRxBufferPtr;
-
-
-
-DacParameters_t DacConfigurations[] = {
-  //Clock1 | Clock2 | AudioIf1 | AudioIf3 | DsdFilter | FirFilter1 | FirFilter2 | DeEmph1 | DeEmph2 | DeltaSigma | Settigns5 | Settings6|
-  {  0x03,    0x00,     0x0B,      0x00,        0x00,       0x01,      0x80,       0x00,     0x00,       0x02,        0x16,       0x16 }, //DAC_PCM_32_0KHZ
-  {  0x02,    0x00,     0x0B,      0x00,        0x00,       0x01,      0x80,       0x00,     0x00,       0x02,        0x16,       0x16 }, //DAC_PCM_44_1KHZ
-  {  0x02,    0x00,     0x0B,      0x00,        0x00,       0x01,      0x80,       0x00,     0x00,       0x02,        0x16,       0x16 }, //DAC_PCM_48_0KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x02,      0x01,       0x00,     0x00,       0x11,        0x16,       0x16 }, //DAC_PCM_88_2KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x02,      0x01,       0x00,     0x00,       0x11,        0x16,       0x16 }, //DAC_PCM_96_0KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x04,      0x02,       0x00,     0x00,       0x11,        0x16,       0x16 }, //DAC_PCM_176_4KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x04,      0x02,       0x00,     0x00,       0x11,        0x16,       0x16 }, //DAC_PCM_192_KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x08,      0x80,       0x00,     0x00,       0x11,        0x16,       0x16 }, //DAC_PCM_362_8KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x08,      0x80,       0x00,     0x00,       0x11,        0x16,       0x16 }, //DAC_PCM_384_0KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x08,      0x80,       0x00,     0x00,       0x01,        0x16,       0x16 }, //DAC_PCM_705_6KHZ
-  {  0x00,    0x00,     0x0B,      0x00,        0x00,       0x08,      0x80,       0x00,     0x00,       0x01,        0x16,       0x16 }, //DAC_PCM_768_0KHZ
-  {  0x00,    0x00,     0x8B,      0x00,        0x02,       0x00,      0x00,       0x00,     0x00,       0x02,        0x9E,       0x1E }, //DAC_DSD_64
-  {  0x00,    0x00,     0x8B,      0x00,        0x01,       0x00,      0x00,       0x00,     0x00,       0x02,        0x9E,       0x1E }, //DAC_DSD_128
-  {  0x00,    0x00,     0x8B,      0x00,        0x00,       0x00,      0x00,       0x00,     0x00,       0x02,        0x9E,       0x1E }, //DAC_DSD_256
-  {  0x00,    0x00,     0x8B,      0x00,        0x00,       0x00,      0x00,       0x00,     0x00,       0x02,        0x9E,       0x1E }, //DAC_DSD_512
-};
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -379,15 +342,8 @@ void SetRoute (Route_t route);
 /*** Tasks ***/
 void UpTimeTask(void);
 
-/*** Dac ***/
-void DacModeTask(void);
-void DacSequenceTask(void);
-void DacCustomConfigPrint(DacParameters_t *params);
-
-/*** DacConfig ***/
-void DacSetParams (DacParameters_t *params, MasterClocks_t clock);
-void DacSoftRstOn();
-void DacSoftRstOff();
+void RelayMuteOff(void);
+void RelayMuteOn(void);
 
 void DebugTask(DebugState_t dbg);
 
@@ -454,7 +410,7 @@ int main(void)
   FrMeterStart();
 
   PCM9211_Init(&hi2c1, PCM9211_DEVICE_ADDRESS);
-  DacBD34Init(&hi2c1, BD34_DEVICE_ADDRESS);
+  BD34301_Init(&hi2c1, BD34_DEVICE_ADDRESS);
 
   /*** SRC ***/
   /*
@@ -495,6 +451,7 @@ int main(void)
   Device.MasterClock = CLK_22_5792MHZ;
   Device.XmosStatus.Pre = XMOS_UNKNOWN;
   Device.Volume.Curr = 100;
+  Device.MuteByUser = 0;
 
   HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
   HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); // USB Input Off
@@ -543,6 +500,10 @@ int main(void)
      * - Ha DSD jön az nem mehet keresztül a SRC, a routot kell változtatni (HDMI vagy XMOS)-n úgy hogy ne menejen keresztül rajta
      * - Ha nem USB-röl jön a jel akkor kiválasszam az OP
      **/
+
+    static uint8_t flag;
+    static uint32_t timestamp;
+
     Device.AudioType.Curr = GetAudioType();
     if( Device.Route.Curr == ROUTE_HDMI_DAC ||
         Device.Route.Curr == ROUTE_BNC_DAC ||
@@ -551,97 +512,118 @@ int main(void)
     {
       if(Device.AudioType.Pre != Device.AudioType.Curr)
       {
-        /*** Mute On ***/
-        DacBD34RegWrite(0x2A, 0x00);
-        HAL_GPIO_TogglePin(LIVE_LED_GPIO_Port, LIVE_LED_Pin);
-        Device.Diag.SpdifAuidoTypeChangedCnt++;
-
-        switch(Device.AudioType.Curr)
+        if(flag == 0)
         {
-           case AUDIO_PCM_32_0KHZ:{
-             Device.DacAudioFormat = DAC_PCM_32_0KHZ;
-             Device.MasterClock = CLK_22_5792MHZ;
-             break;
-           }
-           case AUDIO_PCM_44_1KHZ:{
-             Device.DacAudioFormat = DAC_PCM_44_1KHZ;
-             Device.MasterClock = CLK_22_5792MHZ;
-             break;
-           }
-           case AUDIO_PCM_48_0KHZ:{
-             Device.DacAudioFormat = DAC_PCM_48_0KHZ;
-             Device.MasterClock = CLK_24_575MHZ;
-             break;
-           }
-           case AUDIO_PCM_88_2KHZ:{
-             Device.DacAudioFormat = DAC_PCM_88_2KHZ;
-             Device.MasterClock = CLK_22_5792MHZ;
-             break;
-           }
-           case AUDIO_PCM_96_0KHZ:{
-             Device.DacAudioFormat = DAC_PCM_96_0KHZ;
-             Device.MasterClock = CLK_24_575MHZ;
-             break;
-           }
-           case AUDIO_PCM_176_4KHZ:{
-             Device.DacAudioFormat = DAC_PCM_176_4KHZ;
-             Device.MasterClock = CLK_22_5792MHZ;
-             break;
-           }
-           case AUDIO_PCM_192_KHZ:{
-             Device.DacAudioFormat = DAC_PCM_192_KHZ;
-             Device.MasterClock = CLK_24_575MHZ;
-             break;
-           }
-           case AUDIO_PCM_352_8KHZ:{
-               Device.DacAudioFormat = DAC_PCM_352_8KHZ;
-               Device.MasterClock = CLK_22_5792MHZ;
-               break;
-           }
-           case AUDIO_PCM_384_0KHZ:{
-               Device.DacAudioFormat = DAC_PCM_384_0KHZ;
-               Device.MasterClock = CLK_24_575MHZ;
-             break;
-           }
-           case AUDIO_PCM_705_6KHZ:{
-               Device.DacAudioFormat = DAC_PCM_705_6KHZ;
-               Device.MasterClock = CLK_24_575MHZ;
-               break;
-           }
-           case AUDIO_DSD_64:{
-               Device.DacAudioFormat = DAC_DSD_64;
-               Device.MasterClock = CLK_22_5792MHZ;
-               break;
-             }
-           case AUDIO_DSD_128:{
-             Device.DacAudioFormat = DAC_DSD_128;
-             Device.MasterClock = CLK_22_5792MHZ;
-             break;
-           }
-           case AUDIO_DSD_256:{
-             Device.DacAudioFormat = DAC_DSD_256;
-             Device.MasterClock = CLK_22_5792MHZ;
-             break;
-           }
-           case AUDIO_DSD_512:
-           {
-             Device.DacAudioFormat = DAC_DSD_512;
-             Device.MasterClock = CLK_22_5792MHZ;
-             break;
-           }
-           case AUDIO_UNKNOWN: {
-             break;
-           }
+          BD34301_MuteOn();
+          RelayMuteOn();
+          Device.Diag.SpdifAuidoTypeChangedCnt++;
+          flag = 1;
+          timestamp = HAL_GetTick();
         }
-        DacSoftRstOn();
-        Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
-        DacSetParams(&DacConfigurations[Device.DacAudioFormatToBeSet], Device.MasterClock);
-        DacSoftRstOff();
-        /*** DAC Mute Off ***/
-        DacBD34RegWrite(0x2A, 0x03);
-        Device.AudioType.Pre = Device.AudioType.Curr;
+        if(flag == 1)
+        {
+          if(HAL_GetTick() - timestamp > 500)
+          {
+            flag = 0;
+            switch(Device.AudioType.Curr)
+            {
+               case AUDIO_PCM_32_0KHZ:{
+                 Device.DacAudioFormat = DAC_PCM_32_0KHZ;
+                 Device.MasterClock = CLK_22_5792MHZ;
+                 break;
+               }
+               case AUDIO_PCM_44_1KHZ:{
+                 Device.DacAudioFormat = DAC_PCM_44_1KHZ;
+                 Device.MasterClock = CLK_22_5792MHZ;
+                 break;
+               }
+               case AUDIO_PCM_48_0KHZ:{
+                 Device.DacAudioFormat = DAC_PCM_48_0KHZ;
+                 Device.MasterClock = CLK_24_575MHZ;
+                 break;
+               }
+               case AUDIO_PCM_88_2KHZ:{
+                 Device.DacAudioFormat = DAC_PCM_88_2KHZ;
+                 Device.MasterClock = CLK_22_5792MHZ;
+                 break;
+               }
+               case AUDIO_PCM_96_0KHZ:{
+                 Device.DacAudioFormat = DAC_PCM_96_0KHZ;
+                 Device.MasterClock = CLK_24_575MHZ;
+                 break;
+               }
+               case AUDIO_PCM_176_4KHZ:{
+                 Device.DacAudioFormat = DAC_PCM_176_4KHZ;
+                 Device.MasterClock = CLK_22_5792MHZ;
+                 break;
+               }
+               case AUDIO_PCM_192_KHZ:{
+                 Device.DacAudioFormat = DAC_PCM_192_KHZ;
+                 Device.MasterClock = CLK_24_575MHZ;
+                 break;
+               }
+               case AUDIO_PCM_352_8KHZ:{
+                   Device.DacAudioFormat = DAC_PCM_352_8KHZ;
+                   Device.MasterClock = CLK_22_5792MHZ;
+                   break;
+               }
+               case AUDIO_PCM_384_0KHZ:{
+                   Device.DacAudioFormat = DAC_PCM_384_0KHZ;
+                   Device.MasterClock = CLK_24_575MHZ;
+                 break;
+               }
+               case AUDIO_PCM_705_6KHZ:{
+                   Device.DacAudioFormat = DAC_PCM_705_6KHZ;
+                   Device.MasterClock = CLK_24_575MHZ;
+                   break;
+               }
+               case AUDIO_DSD_64:{
+                   Device.DacAudioFormat = DAC_DSD_64;
+                   Device.MasterClock = CLK_22_5792MHZ;
+                   break;
+                 }
+               case AUDIO_DSD_128:{
+                 Device.DacAudioFormat = DAC_DSD_128;
+                 Device.MasterClock = CLK_22_5792MHZ;
+                 break;
+               }
+               case AUDIO_DSD_256:{
+                 Device.DacAudioFormat = DAC_DSD_256;
+                 Device.MasterClock = CLK_22_5792MHZ;
+                 break;
+               }
+               case AUDIO_DSD_512:
+               {
+                 Device.DacAudioFormat = DAC_DSD_512;
+                 Device.MasterClock = CLK_22_5792MHZ;
+                 break;
+               }
+               case AUDIO_UNKNOWN: {
+                 break;
+               }
+            }
+
+            BD34301_DigitalPowerOff();
+            BD34301_SoftwareResetOn();
+
+            Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
+            Device.Diag.DacReConfgiurationCnt++;
+            SetMasterClock(Device.MasterClock);
+            BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+
+            BD34301_SoftwareResetOff();
+            BD34301_DigitalPowerOn();
+            BD34301_RamClear();
+            BD34301_MuteOff();
+            RelayMuteOff();
+
+            Device.AudioType.Pre = Device.AudioType.Curr;
+          }
+        }
       }
     }
+
+#if XMOS
 
     /*
      * Az USB XMOS statuszta mondja meg mit csináljon a DAC
@@ -649,9 +631,9 @@ int main(void)
     Device.XmosStatus.Curr = ReadXmosStaus();
     if(Device.Route.Curr == ROUTE_USB_DAC)
     {
-      if(Device.Route.Pre != ROUTE_USB_DAC){
-        /*** DAC Mute Off ***/
-        DacBD34RegWrite(0x2A, 0x03);
+      if(Device.Route.Pre != ROUTE_USB_DAC)
+      {
+        BD34301_MuteOff();
       }
 
       /*
@@ -724,13 +706,23 @@ int main(void)
           };
         }
 
-        DacSoftRstOn();
+        BD34301_DigitalPowerOff();
+        BD34301_SoftwareResetOn();
+
         Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
-        DacSetParams(&DacConfigurations[Device.DacAudioFormatToBeSet], Device.MasterClock);
-        DacSoftRstOff();
+        Device.Diag.DacReConfgiurationCnt++;
+        SetMasterClock(Device.MasterClock);
+        BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+
+        BD34301_SoftwareResetOff();
+        BD34301_DigitalPowerOn();
+        BD34301_RamClear();
+        BD34301_MuteOff();
         Device.XmosStatus.Pre = Device.XmosStatus.Curr;
       }
     }
+
+
 
     /*
      *
@@ -746,19 +738,20 @@ int main(void)
         uint8_t currXmosMute = XmosIsMute();
         Device.Diag.XmosMuteSignaledCnt++;
         if(currXmosMute)
-          DacBD34RegWrite(0x2A, 0x00); //Mute On
+          BD34301_RegWrite(0x2A, 0x00); //Mute On
         else
-          DacBD34RegWrite(0x2A, 0x03); //Mute Off
+          BD34301_RegWrite(0x2A, 0x03); //Mute Off
         preXmosMute = currXmosMute;
       }
     }
-
+#endif
     if(Device.Route.Pre != Device.Route.Curr){
       SetRoute(Device.Route.Curr);
       Device.AudioType.Pre = AUDIO_UNKNOWN;
       Device.XmosStatus.Pre = XMOS_UNKNOWN;
       Device.Route.Pre = Device.Route.Curr;
     }
+
 
     /*
      * A Volume 0..100 között értelmezett
@@ -771,8 +764,8 @@ int main(void)
       if(x < 0.1)
         x = 0;
       uint8_t reg = (uint8_t)(255 - x * 255);
-      DacBD34RegWrite(0x21, reg);
-      DacBD34RegWrite(0x22, reg);
+      BD34301_RegWrite(0x21, reg);
+      BD34301_RegWrite(0x22, reg);
       Device.Volume.Pre = Device.Volume.Curr;
     }
 
@@ -780,6 +773,7 @@ int main(void)
     UartTxTask();
     UpTimeTask();
 
+#if  offf
     /*** SRC Resampler ***/
     /*
      * Ha DSD mértünk a SRC előtt, akkor
@@ -818,9 +812,10 @@ int main(void)
       /*
        * Konfigurálás idejére kikapcsolom a DAC-ot
        */
-      /*** Mute On ***/
-      DacBD34RegWrite(0x2A, 0x00);
-      DacSoftRstOn();
+
+      BD34301_MuteOn();
+      BD34301_SoftwareResetOn();
+
       DelayMs(5);
 
       if(Device.SrcConfig.Curr & 0x80)
@@ -842,15 +837,18 @@ int main(void)
 
       /*** Ha az SRC-t bekapcsolta, akkor újra kell konfgiurálni a DAC-ot is ***/
       Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE);
-      DacSetParams(&DacConfigurations[Device.DacAudioFormatToBeSet], Device.MasterClock);
-      DacSoftRstOff();
-      /*** DAC Mute Off ***/
-      DacBD34RegWrite(0x2A, 0x03);
+      Device.Diag.DacReConfgiurationCnt++;
+      SetMasterClock(Device.MasterClock);
+      BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+
+      BD34301_SoftwareResetOff();
+      BD34301_MuteOff();
+
       DelayMs(5);
 
       Device.SrcConfig.Pre = Device.SrcConfig.Curr;
     }
-#if  offf
+
     /*
      * ***************** CustomDacConfig  ********************************
      * 31:     LR Swap 1:LR Swap, 0:No Swap
@@ -868,7 +866,7 @@ int main(void)
        */
 
       /*** Mute On ***/
-      DacBD34RegWrite(0x2A, 0x00);
+      BD34301_RegWrite(0x2A, 0x00);
       DacSoftRstOn();
       DelayMs(5);
 
@@ -1019,10 +1017,10 @@ int main(void)
        * Leküldöm az új értékekt majd visszakapcsolom a DAC-ot és várok picit
        */
       Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
-      DacSetParams(&DacConfigurations[Device.DacAudioFormatToBeSet], Device.MasterClock);
+      BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormatToBeSet]);
       DacSoftRstOff();
       /*** DAC Mute Off ***/
-      DacBD34RegWrite(0x2A, 0x03);
+      BD34301_RegWrite(0x2A, 0x03);
       DelayMs(5);
       Device.CustomDacConfig.Pre = Device.CustomDacConfig.Curr;
     }
@@ -1032,18 +1030,6 @@ int main(void)
 
    //Device.Diag.PCM9211SamplingFreq = PCM9211_SamplingFreq();
 
-
-#if DAC_AUDIO_FORMAT_DEBUG
-    /*
-     * Az aktuális beállitásokat visszaküldi debug céljára
-     */
-    static uint32_t timestamp;
-    if(HAL_GetTick() - timestamp > 1000 )
-    {
-      timestamp = HAL_GetTick();
-      DacCustomConfigPrint(&DacConfigurations[Device.DacAudioFormat]);
-    }
-#endif
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -1500,8 +1486,6 @@ static void MX_GPIO_Init(void)
  */
 AudioTypes_t GetAudioType()
 {
-  //static AudioTypes_t types[] = {AUDIO_UNKNOWN, AUDIO_UNKNOWN, AUDIO_UNKNOWN};
-  // static AudioTypes_t pretype = AUDIO_UNKNOWN;
   float tol = 0.04;
 
   uint32_t lrck = Device.Meas.FreqLRCK_MHz;
@@ -1545,34 +1529,7 @@ AudioTypes_t GetAudioType()
     }
   }
 
-  /*
-   * Ez itt egy átlagolás.
-   *
-   * A problém az volt, hogy időnkét a frekimérés hibázott, de csak akkor
-   * amikor ment az UI-vel a kommunikáció... (PC-vel nem volt tapasztalhat).
-   *
-   * Ha n daram korábbi állapot egyezik, akkor térünk vissza azzal ami átlagban
-   * van. Ha nem, akkor visszatérünk a mentett korábbi álapottal.
-   *
-   * egyel balra sifhtelek minden új elemet és a végére beszurom az újat.
-   *
-   *
-   *
-   */
-  /*
-  types[0] = types[1];
-  types[1] = types[2];
-  types[2] = result;
-  for(int i = 1; i < sizeof(types)/sizeof(AudioTypes_t); i++)
-  {
-    if(types[0] != types[i])
-    {
-      Device.Diag.AuidoTypeCorrectionCnt++;
-      return pretype;
-    }
-  }
-  pretype = result;
-  */
+ // DelayMs(50);
   return result;
 }
 /* DAC -----------------------------------------------------------------------*/
@@ -1622,93 +1579,6 @@ DacAudioFormat_t SrcAudioFormatCorrection(DacAudioFormat_t currAudioFormat, uint
   return retval;
 }
 
-/*
- * A DAC nál üzemmódot váltani csak Reset-ből és a végén ki kell kapcsolni a resetet.
- *
- */
-void DacSetParams (DacParameters_t *params, MasterClocks_t clock)
-{
-  Device.Diag.DacReConfgiurationCnt++;
-  SetMasterClock(clock);
-  DelayMs(12.5);
-
-  //DacSoftRstOn();
-  /*** Mode Switching ***/
-  DacBD34RegWrite(0x04, params->Clock1);
-  DacBD34RegWrite(0x06, params->Clock2);
-  DacBD34RegWrite(0x10, params->AudioIf1);
-  DacBD34RegWrite(0x13, params->AudioIf3);
-  DacBD34RegWrite(0x16, params->DsdFilter);
-  DacBD34RegWrite(0x30, params->FirFilter1);
-  DacBD34RegWrite(0x31, params->FirFilter2);
-  DacBD34RegWrite(0x33, params->DeEmph1);
-  DacBD34RegWrite(0x34, params->DeEmph1);
-  DacBD34RegWrite(0x40, params->DeltaSigma);
-  DacBD34RegWrite(0x60, params->Settings5);
-  DacBD34RegWrite(0x61, params->Settings6);
-  //DacSoftRstOff();
-}
-
-void DacSoftRstOn()
-{
-  /*** Mute On ***/
-  //DacBD34RegWrite(0x2A, 0x00);
-
-  /*** Digital Power Off ***/
-  DacBD34RegWrite(0x02, 0x00);
-
-  /*** Software Reset On ***/
-  DacBD34RegWrite(0x00, 0x00);
-}
-
-void DacSoftRstOff()
-{
-  /*** Software Reset Off ***/
-  DacBD34RegWrite(0x00, 0x01);
-
-  /*** Digital Power On ***/
-  DacBD34RegWrite(0x02, 0x01);
-
-  /*** Pop Noise Prevention ***/
-  DacBD34RegWrite(0xD0, 0x6A);
-  DacBD34RegWrite(0xD3, 0x10);
-  DacBD34RegWrite(0xD3, 0x00);
-  DacBD34RegWrite(0xD0, 0x00);
-
-  /*** Analog Power On ***/
-  //itt nem úgy viselkedik a DAC mint ahogy azt a Datasheet leirja
-  //Ez itt nem kellene hogy legyen, de enékül nem megy
-  DacBD34RegWrite(0x03, 0x01);
-
-  /*** RAM Clear On-Off ***/
-  DacBD34RegWrite(0x2F, 0x80);
-  DacBD34RegWrite(0x2F, 0x00);
-  /*** Mute Off ***/
-  //DacBD34RegWrite(0x2A, 0x03);
-}
-
-void DacCustomConfigPrint(DacParameters_t *params)
-{
-#if DAC_AUDIO_FORMAT_DEBUG
-  sprintf(UartTxBuffer, "0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
-      Device.SRC.System,
-      Device.SRC.Format,
-      params->Clock1,
-      params->Clock2,
-      params->AudioIf1,
-      params->AudioIf3,
-      params->DsdFilter,
-      params->FirFilter1,
-      params->FirFilter2,
-      params->DeEmph1,
-      params->DeEmph2,
-      params->DeltaSigma,
-      params->Settings5,
-      params->Settings6
-  );
-#endif
-}
-
 /* FrMeter -------------------------------------------------------------------*/
 void FrMeterStart(void)
 {
@@ -1751,8 +1621,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 
 /* Inputs & Outputs ----------------------------------------------------------*/
+void RelayMuteOn(void)
+{
+  HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin, GPIO_PIN_SET);
+}
 
-#define DAC_SIGNAL_HOLD_MS  25
+void RelayMuteOff(void)
+{
+  HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin, GPIO_PIN_RESET);
+}
+
 void SetRoute (Route_t route)
 {
   switch(route)
@@ -2025,7 +1903,20 @@ char* UartParser(char *line)
   /*** DAC CONFIG ***/
   else if(!strcmp(cmd,"DAC:CONFIG")){
     sscanf(line, "#%x %s %d",&addr, cmd, &intarg);
+
     Device.DacAudioFormat = intarg;
+
+    BD34301_DigitalPowerOff();
+    BD34301_SoftwareResetOn();
+
+    //ToDo SetMasterClock(Device.MasterClock);
+    BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+
+    BD34301_SoftwareResetOff();
+    BD34301_DigitalPowerOn();
+    BD34301_RamClear();
+    BD34301_MuteOff();
+
     strcpy(buffer, "DAC:CONFIG OK");
   }
   else if(!strcmp(cmd,"DAC:CONFIG?")){
@@ -2057,7 +1948,9 @@ char* UartParser(char *line)
       DacConfigurations[Device.DacAudioFormat].DeEmph2 = arg7;
       DacConfigurations[Device.DacAudioFormat].DeltaSigma = arg8;
       strcpy(buffer, "DAC:CONFIG OK");
-      DacSetParams(&DacConfigurations[Device.DacAudioFormat], Device.MasterClock);
+      Device.Diag.DacReConfgiurationCnt++;
+      SetMasterClock(Device.MasterClock);
+      BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
   }
 
   /*** ROUTE ***/
@@ -2194,19 +2087,19 @@ void DebugTask(DebugState_t dbg)
     }
     case SDBG_DAC_MUTE_ON:{
       /*** Mute On ***/
-      DacBD34RegWrite(0x2A, 0x00);
+      BD34301_RegWrite(0x2A, 0x00);
       dbg = SDBG_IDLE;
       break;
     }
     case SDBG_DAC_MUTE_OFF:{
       /*** Mute Off ***/
-      DacBD34RegWrite(0x2A, 0x03);
+      BD34301_RegWrite(0x2A, 0x03);
       dbg = SDBG_IDLE;
       break;
     }
     case SDBG_DAC_RECONFIG:{
       //DacSoftRstOn();
-      DacSetParams(&DacConfigurations[Device.DacAudioFormat], Device.MasterClock);
+      //DacSetParams(&DacConfigurations[Device.DacAudioFormat], Device.MasterClock);
       //DacSoftRstOff();
       break;
     }
@@ -2231,6 +2124,7 @@ void UpTimeTask(void)
     Device.UpTimeSec++;
   }
 }
+
 
 
 
