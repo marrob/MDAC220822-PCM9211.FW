@@ -64,6 +64,55 @@ uint8_t DacBD34Init(I2C_HandleTypeDef *i2c, uint8_t address)
   return BD34_OK;
 }
 
+void BD34301_Clear(void);
+void BD34301_SoftwareResetOn(void);
+void BD34301_SoftwareResetOff(void);
+void BD34301_DigitalPowerOn(void);
+void BD34301_DigitalPowerOff(void);
+void BD34301_MuteOn(void);
+void BD34301_MuteOff(void);
+
+void BD34301_Clear(void)
+{
+  DacBD34RegWrite(0x2F, 0x80);
+  DacBD34RegWrite(0x2F, 0x00);
+}
+
+void BD34301_SoftwareResetOn(void)
+{
+  DacBD34RegWrite(0x00, 0x00);
+}
+
+void BD34301_SoftwareResetOff(void)
+{
+  DacBD34RegWrite(0x00, 0x01);
+}
+
+void BD34301_DigitalPowerOn(void)
+{
+  DacBD34RegWrite(0x02, 0x01);
+}
+
+void BD34301_DigitalPowerOff(void)
+{
+  DacBD34RegWrite(0x02, 0x00);
+}
+
+void BD34301_MuteOn(void)
+{
+  DacBD34RegWrite(0x2A, 0x00);
+}
+
+void BD34301_MuteOff(void)
+{
+  DacBD34RegWrite(0x2A, 0x03);
+}
+
+void BD34301_ModeSwitching()
+{
+// Ide át kell hozni a mode switch-inget
+
+}
 
 HAL_StatusTypeDef DacBD34RegWrite(uint8_t address, uint8_t data)
 {

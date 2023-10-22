@@ -14,43 +14,10 @@
   * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
-  *
-  *
-  * 221001_0849:
-  * *SPI buszok osszevonasa:
-  * - Az lenne a javsalatom hogy 1db SPI busz legyen
-  * - SPI2_SCK-hoz legyen kötve a SPI1_SCK, SPI2_MOSI-hoz a SPI1_MOSI
-  * - Az SPI1 szünjön meg (2db uC port felszabadult)) - ezt nem lehet össze vonni mert invártlni kellene
-  * *SRC egyszerusítések és kiegészítés
-  * - A BYPASS már egy korábbi módosítás során megszünt...
-  * - A RATIO kiment menjen LED-re. (1uC port felszabadult... )
-  * - A RDY kimentre nincs szükség. (1uC port felszabadult...)
-  *  A RESTEB összevonások
-  * - már korábban megtörténtek..
-  * *Wolfson kiegészíés
-  * - TX0-ra és az MCLK -ra szeretnék tesztpontot
-  * * Minde CS - Chips Selecten legyen felhuzó, minden eszköz kikapcsolt álapottal induljon
-  * *Emélkeztetok:
-  * - Gábronak jelezni, hogy az utlsó tervekbol dolgozzon, és tarcsa mindig nyilván a váltoásokat
-    (pl az optók TLP185 -> PC400 cseréje nincs feltüntetve...)
-  * - Gábortól megkérdenzi hogy a DATA, LRCK, BCLK keveredést javította-e már? dokumentálva van?
-  * - Wolfson resztetet nem lehet összevonni a RESETB-vel mivel invertálni kellne... ez csak emlékeztetö...
-  * - Gábornak jelezni, hogy DSD módban a De
-  * - MUX_PCM-et at kellene nevezni SRC bypassnak
-  *
   *221121_0841:
   * User Manual:
   * - A route-ot a felhasználó állitja
   * - A DAC paramétereit a routról jövő jel alapján a uC határozza meg... (többnyire frekiméréssel)
-  *
-  *230202_1510
-  * - Automatikus némitás hozzáadva (route váltáskor és audió type váltáskor relésen)
-  * - A wolfsonnak problémája van 192KHz vátlással, ezt manuálisan végzem...
-  * Ismert problémák:
-  * - Néha audio tipus vátáskor bjeön a robothang, ezt egyenlőre csak az SPDIF beneteken tapsztalni, valószinüleg DAC vagy a wolfson problémája
-  *   A DAC érzékeny rá mikor kapja meg a jelet.
-  * - A hang beusztatása nem müködik, valószinüleg ez is az időzitésnek tudhato be.
-  * - A wolfson 176.4-et rosszul kezeli, ilyenkor 88.2KHz-et mér a frekimérő
   *
   * 230430_1732:
   * - A frekvencia mérés átkerült az SRC elé, igy közvetett módon lehet meghatározni a DacAudioFormat-ot.
@@ -521,34 +488,36 @@ int main(void)
   SRC41Init(&hspi1);
   SCR41Update(&Device.SRC);
 
-  /*** Defualt ***/
+  /*** Defualt - OFF ***/
   Device.Route.Pre = ROUTE_NONE_DAC;
-  //Device.Route.Curr = ROUTE_MUTE_DAC;
-  Device.Route.Curr = ROUTE_RCA_DAC;
+  Device.Route.Curr = ROUTE_MUTE_DAC;
   Device.DacAudioFormat = DAC_PCM_44_1KHZ;
   Device.MasterClock = CLK_22_5792MHZ;
   Device.XmosStatus.Pre = XMOS_UNKNOWN;
-
   Device.Volume.Curr = 100;
 
-  /*** Everything is Off ***/
-  /*
   HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
   HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); // USB Input Off
   HAL_GPIO_WritePin(EN_SPDIF_ISO_GPIO_Port, EN_SPDIF_ISO_Pin, GPIO_PIN_RESET); // SPDIF Input Off
-  HAL_GPIO_WritePin(MUX_PCM_GPIO_Port, MUX_PCM_Pin, GPIO_PIN_SET); //SRC Off
+  HAL_GPIO_WritePin(MUX_PCM_GPIO_Port, MUX_PCM_Pin, GPIO_PIN_SET); //SRC Off - SRC Bypass ON
   HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_RESET); // Mute Off
-  */
 
+
+#if WAKEUP
+  Device.Route.Pre = ROUTE_NONE_DAC;
+  Device.Route.Curr = ROUTE_USB_DAC;
+  Device.DacAudioFormat = DAC_PCM_44_1KHZ;
+  Device.MasterClock = CLK_22_5792MHZ;
+  Device.XmosStatus.Pre = XMOS_UNKNOWN;
+  Device.Volume.Curr = 100;
   /*** Nincs némitva és USB-XMOS a bement van kiválaszva SRC bypass ***/
   HAL_GPIO_WritePin(EN_I2S_I2C_ISO_GPIO_Port, EN_I2S_I2C_ISO_Pin, GPIO_PIN_SET); //HDMI I2C Off
   HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_RESET); // USB Input Off
   HAL_GPIO_WritePin(EN_SPDIF_ISO_GPIO_Port, EN_SPDIF_ISO_Pin, GPIO_PIN_RESET); // SPDIF Input Off
   HAL_GPIO_WritePin(EN_USB_ISO_GPIO_Port, EN_USB_ISO_Pin, GPIO_PIN_SET); //U121
-  //HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_SET); // Mute Off
-
+  HAL_GPIO_WritePin(DAC_MUTE_COM_GPIO_Port, DAC_MUTE_COM_Pin,GPIO_PIN_SET); // Mute Off
   HAL_GPIO_WritePin(MUX_PCM_GPIO_Port, MUX_PCM_Pin, GPIO_PIN_SET); //HW SRC Bypass ON
-
+#endif
 
   /* USER CODE END 2 */
 
@@ -574,7 +543,6 @@ int main(void)
      * - Ha DSD jön az nem mehet keresztül a SRC, a routot kell változtatni (HDMI vagy XMOS)-n úgy hogy ne menejen keresztül rajta
      * - Ha nem USB-röl jön a jel akkor kiválasszam az OP
      **/
-
     Device.AudioType.Curr = GetAudioType();
     if( Device.Route.Curr == ROUTE_HDMI_DAC ||
         Device.Route.Curr == ROUTE_BNC_DAC ||
@@ -588,8 +556,8 @@ int main(void)
         HAL_GPIO_TogglePin(LIVE_LED_GPIO_Port, LIVE_LED_Pin);
         Device.Diag.SpdifAuidoTypeChangedCnt++;
 
-         switch(Device.AudioType.Curr)
-         {
+        switch(Device.AudioType.Curr)
+        {
            case AUDIO_PCM_32_0KHZ:{
              Device.DacAudioFormat = DAC_PCM_32_0KHZ;
              Device.MasterClock = CLK_22_5792MHZ;
@@ -664,14 +632,14 @@ int main(void)
            case AUDIO_UNKNOWN: {
              break;
            }
-         }
-         DacSoftRstOn();
-         Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
-         DacSetParams(&DacConfigurations[Device.DacAudioFormatToBeSet], Device.MasterClock);
-         DacSoftRstOff();
-         /*** DAC Mute Off ***/
-         DacBD34RegWrite(0x2A, 0x03);
-         Device.AudioType.Pre = Device.AudioType.Curr;
+        }
+        DacSoftRstOn();
+        Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
+        DacSetParams(&DacConfigurations[Device.DacAudioFormatToBeSet], Device.MasterClock);
+        DacSoftRstOff();
+        /*** DAC Mute Off ***/
+        DacBD34RegWrite(0x2A, 0x03);
+        Device.AudioType.Pre = Device.AudioType.Curr;
       }
     }
 
@@ -808,7 +776,7 @@ int main(void)
       Device.Volume.Pre = Device.Volume.Curr;
     }
 
-    LiveLedTask(&hLiveLed);
+  //  LiveLedTask(&hLiveLed);
     UartTxTask();
     UpTimeTask();
 
@@ -1062,7 +1030,7 @@ int main(void)
 
    DebugTask(Device.DebugState);
 
-   Device.Diag.PCM9211SamplingFreq = PCM9211_SamplingFreq();
+   //Device.Diag.PCM9211SamplingFreq = PCM9211_SamplingFreq();
 
 
 #if DAC_AUDIO_FORMAT_DEBUG
@@ -1083,7 +1051,6 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
-
 
 /**
   * @brief System Clock Configuration
@@ -1442,7 +1409,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : DAC_MUTE_COM_Pin */
   GPIO_InitStruct.Pin = DAC_MUTE_COM_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(DAC_MUTE_COM_GPIO_Port, &GPIO_InitStruct);
@@ -1533,8 +1500,8 @@ static void MX_GPIO_Init(void)
  */
 AudioTypes_t GetAudioType()
 {
-  static AudioTypes_t types[] = {AUDIO_UNKNOWN, AUDIO_UNKNOWN, AUDIO_UNKNOWN};
-  static AudioTypes_t pretype = AUDIO_UNKNOWN;
+  //static AudioTypes_t types[] = {AUDIO_UNKNOWN, AUDIO_UNKNOWN, AUDIO_UNKNOWN};
+  // static AudioTypes_t pretype = AUDIO_UNKNOWN;
   float tol = 0.04;
 
   uint32_t lrck = Device.Meas.FreqLRCK_MHz;
@@ -1771,7 +1738,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       * 10ms-es időalap estén pl a LIVE_LED-nél 20ms-es periódusidőt kell mérned
       * 2022.02.02 by marrob
       */
-     HAL_GPIO_TogglePin(TIMEBASE_OUT_GPIO_Port, TIMEBASE_OUT_Pin);
+     //HAL_GPIO_TogglePin(TIMEBASE_OUT_GPIO_Port, TIMEBASE_OUT_Pin);
 
    }
    else if(htim->Instance == FRMETER_TIM_LRCK_COUNTER)
