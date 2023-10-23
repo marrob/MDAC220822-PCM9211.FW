@@ -20,7 +20,7 @@ static I2C_HandleTypeDef *_i2c;
 static uint8_t  _devAddress;
 static uint32_t _errorCounter;
 
-BD34301_Mode_t DacConfigurations[] = {
+BD34301_Mode_t BD34301_ModeList[] = {
   //Clock1 | Clock2 | AudioIf1 | AudioIf3 | DsdFilter | FirFilter1 | FirFilter2 | DeEmph1 | DeEmph2 | DeltaSigma | Settigns5 | Settings6|
   {  0x03,    0x00,     0x0B,      0x00,        0x00,       0x01,      0x80,       0x00,     0x00,       0x02,        0x16,       0x16 }, //DAC_PCM_32_0KHZ
   {  0x02,    0x00,     0x0B,      0x00,        0x00,       0x01,      0x80,       0x00,     0x00,       0x02,        0x16,       0x16 }, //DAC_PCM_44_1KHZ

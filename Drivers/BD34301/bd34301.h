@@ -42,7 +42,7 @@ typedef struct _BD34301_Mode{
 
 
 /* Exported variables ------------------------------------------------------- */
-extern BD34301_Mode_t DacConfigurations[];
+extern BD34301_Mode_t BD34301_ModeList[];
 
 
 

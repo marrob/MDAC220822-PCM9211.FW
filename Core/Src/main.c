@@ -514,8 +514,8 @@ int main(void)
       {
         if(flag == 0)
         {
-          BD34301_MuteOn();
           RelayMuteOn();
+          BD34301_MuteOn();
           Device.Diag.SpdifAuidoTypeChangedCnt++;
           flag = 1;
           timestamp = HAL_GetTick();
@@ -609,21 +609,19 @@ int main(void)
             Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
             Device.Diag.DacReConfgiurationCnt++;
             SetMasterClock(Device.MasterClock);
-            BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+            DelayMs(15); //Kritikus pl 88.2 és 96 váltás között
+            BD34301_ModeSwitching(&BD34301_ModeList[Device.DacAudioFormat]);
 
             BD34301_SoftwareResetOff();
             BD34301_DigitalPowerOn();
-            BD34301_RamClear();
-            BD34301_MuteOff();
+            BD34301_RamClear(); //Kritkus, nem szól a PCM ha nincs
             RelayMuteOff();
-
+            BD34301_MuteOff();
             Device.AudioType.Pre = Device.AudioType.Curr;
           }
         }
       }
     }
-
-#if XMOS
 
     /*
      * Az USB XMOS statuszta mondja meg mit csináljon a DAC
@@ -633,7 +631,7 @@ int main(void)
     {
       if(Device.Route.Pre != ROUTE_USB_DAC)
       {
-        BD34301_MuteOff();
+        BD34301_MuteOn();
       }
 
       /*
@@ -712,17 +710,16 @@ int main(void)
         Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
         Device.Diag.DacReConfgiurationCnt++;
         SetMasterClock(Device.MasterClock);
-        BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+        DelayMs(15); //Kritikus pl 88.2 és 96 váltás között
+        BD34301_ModeSwitching(&BD34301_ModeList[Device.DacAudioFormat]);
 
         BD34301_SoftwareResetOff();
         BD34301_DigitalPowerOn();
-        BD34301_RamClear();
+        BD34301_RamClear(); //Kritkus, nem szól a PCM ha nincs
         BD34301_MuteOff();
         Device.XmosStatus.Pre = Device.XmosStatus.Curr;
       }
     }
-
-
 
     /*
      *
@@ -744,7 +741,7 @@ int main(void)
         preXmosMute = currXmosMute;
       }
     }
-#endif
+
     if(Device.Route.Pre != Device.Route.Curr){
       SetRoute(Device.Route.Curr);
       Device.AudioType.Pre = AUDIO_UNKNOWN;
@@ -769,11 +766,10 @@ int main(void)
       Device.Volume.Pre = Device.Volume.Curr;
     }
 
-  //  LiveLedTask(&hLiveLed);
+    LiveLedTask(&hLiveLed);
     UartTxTask();
     UpTimeTask();
 
-#if  offf
     /*** SRC Resampler ***/
     /*
      * Ha DSD mértünk a SRC előtt, akkor
@@ -839,7 +835,7 @@ int main(void)
       Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE);
       Device.Diag.DacReConfgiurationCnt++;
       SetMasterClock(Device.MasterClock);
-      BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+      BD34301_ModeSwitching(&BD34301_ModeList[Device.DacAudioFormat]);
 
       BD34301_SoftwareResetOff();
       BD34301_MuteOff();
@@ -864,10 +860,8 @@ int main(void)
       /*
        * Konfigurálás idejére kikapcsolom a DAC-ot
        */
-
-      /*** Mute On ***/
-      BD34301_RegWrite(0x2A, 0x00);
-      DacSoftRstOn();
+      BD34301_MuteOn();
+      BD34301_SoftwareResetOn();
       DelayMs(5);
 
       for(DacAudioFormat_t i = DAC_PCM_32_0KHZ; i <= DAC_DSD_512; i++)
@@ -875,12 +869,12 @@ int main(void)
 
         /*** 31:LR Swap 1:LR Swap, 0:No Swap ***/
         if(Device.CustomDacConfig.Curr & 0x80000000)
-          DacConfigurations[i].AudioIf3 |= 0x01;
+          BD34301_ModeList[i].AudioIf3 |= 0x01;
         else
-          DacConfigurations[i].AudioIf3 &= ~0x01;
+          BD34301_ModeList[i].AudioIf3 &= ~0x01;
 
         /*** Phase Adjust: 1:Adjust,  0:No Adjust ***/
-        DacConfigurations[i].Clock2 &= ~0x01;
+        BD34301_ModeList[i].Clock2 &= ~0x01;
         if( DAC_PCM_32_0KHZ == i ||
             DAC_PCM_44_1KHZ == i ||
             DAC_PCM_48_0KHZ == i ||
@@ -898,13 +892,13 @@ int main(void)
             //DAC_DSD_512 == i
             )
         if(Device.CustomDacConfig.Curr & 0x40000000)
-          DacConfigurations[i].Clock2 |= 0x01;
+          BD34301_ModeList[i].Clock2 |= 0x01;
 
 
         /*** 29,28:  DSD Cut Off Freq ***/
         if(i == DAC_DSD_64 || i == DAC_DSD_128 || i == DAC_DSD_256 || i == DAC_DSD_512){
-          DacConfigurations[i].DsdFilter &= ~0x03;
-          DacConfigurations[i].DsdFilter |= (Device.CustomDacConfig.Curr >> 28) & 0x03;
+          BD34301_ModeList[i].DsdFilter &= ~0x03;
+          BD34301_ModeList[i].DsdFilter |= (Device.CustomDacConfig.Curr >> 28) & 0x03;
         }
 
         if(DAC_PCM_32_0KHZ <=i && i <= DAC_PCM_768_0KHZ)
@@ -916,81 +910,81 @@ int main(void)
           if(Device.CustomDacConfig.Curr & 0x08000000){
             if(DAC_PCM_32_0KHZ == i || DAC_PCM_44_1KHZ == i || DAC_PCM_48_0KHZ == i ||
                 DAC_PCM_88_2KHZ == i || DAC_PCM_96_0KHZ == i || DAC_PCM_176_4KHZ == i || DAC_PCM_192_KHZ)
-              DacConfigurations[i].FirFilter2 &= ~(1<<7); //On
+              BD34301_ModeList[i].FirFilter2 &= ~(1<<7); //On
           }
           else{
-            DacConfigurations[i].FirFilter2 |= 1<<7; //Off
+            BD34301_ModeList[i].FirFilter2 |= 1<<7; //Off
           }
 
           /*** FIR Filter Settings ***/
           uint8_t fir = (Device.CustomDacConfig.Curr >> 25) & 0x03;
-          DacConfigurations[i].FirFilter1 &= ~0x0F; //FirAlgo
-          DacConfigurations[i].FirFilter2 &= ~0x07; //FirCoef
+          BD34301_ModeList[i].FirFilter1 &= ~0x0F; //FirAlgo
+          BD34301_ModeList[i].FirFilter2 &= ~0x07; //FirCoef
 
           /*** Filter Settings: Sharp Roll-Off ***/
           if(fir == 0)
           {
             if(DAC_PCM_32_0KHZ == i || DAC_PCM_44_1KHZ == i || DAC_PCM_48_0KHZ == i)
             {
-              DacConfigurations[i].FirFilter1 |= 0x01;  //FirAlgo
+              BD34301_ModeList[i].FirFilter1 |= 0x01;  //FirAlgo
             }
             else if(DAC_PCM_88_2KHZ == i || DAC_PCM_96_0KHZ == i)
             {
-              DacConfigurations[i].FirFilter1 |= 0x02;  //FirAlgo
-              DacConfigurations[i].FirFilter2 |= 0x01;  //FirCoef
+              BD34301_ModeList[i].FirFilter1 |= 0x02;  //FirAlgo
+              BD34301_ModeList[i].FirFilter2 |= 0x01;  //FirCoef
             }
             else if(DAC_PCM_176_4KHZ == i || DAC_PCM_192_KHZ == i)
             {
-              DacConfigurations[i].FirFilter1 |= 0x04;  //FirAlgo
-              DacConfigurations[i].FirFilter2 |= 0x02;  //FirCoef
+              BD34301_ModeList[i].FirFilter1 |= 0x04;  //FirAlgo
+              BD34301_ModeList[i].FirFilter2 |= 0x02;  //FirCoef
             }
             else if(DAC_PCM_352_8KHZ == i || DAC_PCM_384_0KHZ == i || DAC_PCM_705_6KHZ || DAC_PCM_768_0KHZ == i)
             {
-              DacConfigurations[i].FirFilter1 |= 0x08;  //FirAlgo
-              DacConfigurations[i].FirFilter2 |= 0x80;  //FirCoef
+              BD34301_ModeList[i].FirFilter1 |= 0x08;  //FirAlgo
+              BD34301_ModeList[i].FirFilter2 |= 0x80;  //FirCoef
             }
           }
           /*** Filter Settings: Slow Roll-Off ***/
           else if(fir == 1)
           {
             if(DAC_PCM_32_0KHZ == i || DAC_PCM_44_1KHZ == i || DAC_PCM_48_0KHZ == i){
-              DacConfigurations[i].FirFilter1 |= 0x01;  //FirAlgo
-              DacConfigurations[i].FirFilter2 |= 0x03;  //FirCoef
+              BD34301_ModeList[i].FirFilter1 |= 0x01;  //FirAlgo
+              BD34301_ModeList[i].FirFilter2 |= 0x03;  //FirCoef
             }
             else if(DAC_PCM_88_2KHZ == i || DAC_PCM_96_0KHZ == i){
-              DacConfigurations[i].FirFilter1 |= 0x02;  //FirAlgo
-              DacConfigurations[i].FirFilter2 |= 0x04;  //FirCoef
+              BD34301_ModeList[i].FirFilter1 |= 0x02;  //FirAlgo
+              BD34301_ModeList[i].FirFilter2 |= 0x04;  //FirCoef
             }
             else if(DAC_PCM_176_4KHZ == i || DAC_PCM_192_KHZ == i){
-              DacConfigurations[i].FirFilter1 |= 0x04;  //FirAlgo
-              DacConfigurations[i].FirFilter2 |= 0x05;  //FirCoef
+              BD34301_ModeList[i].FirFilter1 |= 0x04;  //FirAlgo
+              BD34301_ModeList[i].FirFilter2 |= 0x05;  //FirCoef
             }
             else if(DAC_PCM_352_8KHZ == i || DAC_PCM_384_0KHZ == i || DAC_PCM_705_6KHZ || DAC_PCM_768_0KHZ == i)
             {
-              DacConfigurations[i].FirFilter1 |= 0x08;  //FirAlgo
-              DacConfigurations[i].FirFilter2 |= 0x80;  //FirCoef
+              BD34301_ModeList[i].FirFilter1 |= 0x08;  //FirAlgo
+              BD34301_ModeList[i].FirFilter2 |= 0x80;  //FirCoef
             }
           }
 
           /** 24,23:  De-Emphisis Filter: O:Off, 1:32KHz, 2:44.1KHz, 3:48KHz ***/
           uint8_t de = (Device.CustomDacConfig.Curr >> 23) & 0x03;
           /*** De-Emphisis Filter: O:Off ***/
-          DacConfigurations[i].DeEmph1 = 0x00; //FirAlgo
-          DacConfigurations[i].DeEmph2 = 0x00; //FirCoef
+          BD34301_ModeList[i].DeEmph1 = 0x00; //FirAlgo
+          BD34301_ModeList[i].DeEmph2 = 0x00; //FirCoef
           /*** De-Emphisis Filter: 1:32KHz ***/
           if(de == 1){
-            DacConfigurations[i].DeEmph1 = 0x01; //DempFs
-            DacConfigurations[i].DeEmph2 = 0x03; //Demp2:Demp1
+            BD34301_ModeList[i].DeEmph1 = 0x01; //DempFs
+            BD34301_ModeList[i].DeEmph2 = 0x03; //Demp2:Demp1
           }
           /*** De-Emphisis Filter: 2:44.1KHz ***/
           else if(de == 2){
-            DacConfigurations[i].DeEmph1 = 0x02; //DempFs
-            DacConfigurations[i].DeEmph2 = 0x03; //Demp2:Demp1
+            BD34301_ModeList[i].DeEmph1 = 0x02; //DempFs
+            BD34301_ModeList[i].DeEmph2 = 0x03; //Demp2:Demp1
           }
           /*** De-Emphisis Filter: 3:48KHz ***/
           else if(de == 3){
-            DacConfigurations[i].DeEmph1 = 0x03; //DempFs
-            DacConfigurations[i].DeEmph2 = 0x03; //Demp2:Demp1
+            BD34301_ModeList[i].DeEmph1 = 0x03; //DempFs
+            BD34301_ModeList[i].DeEmph2 = 0x03; //Demp2:Demp1
           }
 
           /*** 22,21:  Delta Sigma Settings: 0:8x, 1:16x, 2:32x ***/
@@ -999,16 +993,16 @@ int main(void)
           if(ds == 0){
             /* Csak bizonyos frekenciákon van x8  Table 15. System Clock Frequency Settings in PCM Mode  */
             if(i == DAC_PCM_32_0KHZ || i == DAC_PCM_44_1KHZ ||  i == DAC_PCM_48_0KHZ || i == DAC_PCM_705_6KHZ || i == DAC_PCM_768_0KHZ){
-              DacConfigurations[i].DeltaSigma = 0x00;
+              BD34301_ModeList[i].DeltaSigma = 0x00;
             }
           }
           /*** Delta Sigma Settings: 1:16x ***/
           else if(ds == 1){
-            DacConfigurations[i].DeltaSigma = 0x10;
+            BD34301_ModeList[i].DeltaSigma = 0x10;
           }
           /*** Delta Sigma Settings: 1:32x ***/
           else if(ds == 2){
-            DacConfigurations[i].DeltaSigma = 0x11;
+            BD34301_ModeList[i].DeltaSigma = 0x11;
           }
         }
       }
@@ -1017,18 +1011,16 @@ int main(void)
        * Leküldöm az új értékekt majd visszakapcsolom a DAC-ot és várok picit
        */
       Device.DacAudioFormatToBeSet = SrcAudioFormatCorrection(Device.DacAudioFormat, Device.SrcConfig.Curr & 0x80, Device.SRC.System.MODE );
-      BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormatToBeSet]);
-      DacSoftRstOff();
-      /*** DAC Mute Off ***/
-      BD34301_RegWrite(0x2A, 0x03);
+      BD34301_ModeSwitching(&BD34301_ModeList[Device.DacAudioFormatToBeSet]);
+
+      BD34301_SoftwareResetOff();
+      BD34301_MuteOff();
       DelayMs(5);
+
       Device.CustomDacConfig.Pre = Device.CustomDacConfig.Curr;
     }
-#endif
 
-   DebugTask(Device.DebugState);
-
-   //Device.Diag.PCM9211SamplingFreq = PCM9211_SamplingFreq();
+    DebugTask(Device.DebugState);
 
     /* USER CODE END WHILE */
 
@@ -1265,9 +1257,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 7;
+  htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 60000;
+  htim3.Init.Period = 48000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -1597,8 +1589,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
    if(htim->Instance == FRMETER_TIM_TIMEBASE)
    {
-     Device.Meas.FreqBCLK_MHz = (FreqMeterBclkCounterValue) * 100 * 10;
-     Device.Meas.FreqLRCK_MHz = (FreqMeterLrckCounterValue) * 100;
+     Device.Meas.FreqBCLK_MHz = (FreqMeterBclkCounterValue) * 1000 * 10;
+     Device.Meas.FreqLRCK_MHz = (FreqMeterLrckCounterValue) * 1000;
 
      FreqMeterBclkCounterValue = 0;
      FreqMeterLrckCounterValue = 0;
@@ -1910,7 +1902,7 @@ char* UartParser(char *line)
     BD34301_SoftwareResetOn();
 
     //ToDo SetMasterClock(Device.MasterClock);
-    BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+    BD34301_ModeSwitching(&BD34301_ModeList[Device.DacAudioFormat]);
 
     BD34301_SoftwareResetOff();
     BD34301_DigitalPowerOn();
@@ -1926,31 +1918,31 @@ char* UartParser(char *line)
   /*** DAC PARAMS ***/
   else if(!strcmp(cmd,"DAC:PARAMS?")){
     sprintf(buffer, "DAC:PARAMS? %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
-      DacConfigurations[Device.DacAudioFormat].Clock2,
-      DacConfigurations[Device.DacAudioFormat].AudioIf3,
-      DacConfigurations[Device.DacAudioFormat].DsdFilter,
-      DacConfigurations[Device.DacAudioFormat].FirFilter1,
-      DacConfigurations[Device.DacAudioFormat].FirFilter2,
-      DacConfigurations[Device.DacAudioFormat].DeEmph1,
-      DacConfigurations[Device.DacAudioFormat].DeEmph2,
-      DacConfigurations[Device.DacAudioFormat].DeltaSigma);
+      BD34301_ModeList[Device.DacAudioFormat].Clock2,
+      BD34301_ModeList[Device.DacAudioFormat].AudioIf3,
+      BD34301_ModeList[Device.DacAudioFormat].DsdFilter,
+      BD34301_ModeList[Device.DacAudioFormat].FirFilter1,
+      BD34301_ModeList[Device.DacAudioFormat].FirFilter2,
+      BD34301_ModeList[Device.DacAudioFormat].DeEmph1,
+      BD34301_ModeList[Device.DacAudioFormat].DeEmph2,
+      BD34301_ModeList[Device.DacAudioFormat].DeltaSigma);
   }
   else if(!strcmp(cmd,"DAC:PARAMS")){
     int arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8;
       sscanf(line, "#%x %s %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
                     &addr, cmd, &arg1, &arg2, &arg3, &arg4, &arg5, &arg6, &arg7, &arg8);
-      DacConfigurations[Device.DacAudioFormat].Clock2 = arg1;
-      DacConfigurations[Device.DacAudioFormat].AudioIf3  = arg2;
-      DacConfigurations[Device.DacAudioFormat].DsdFilter = arg3;
-      DacConfigurations[Device.DacAudioFormat].FirFilter1 = arg4;
-      DacConfigurations[Device.DacAudioFormat].FirFilter2 = arg5;
-      DacConfigurations[Device.DacAudioFormat].DeEmph1 = arg6;
-      DacConfigurations[Device.DacAudioFormat].DeEmph2 = arg7;
-      DacConfigurations[Device.DacAudioFormat].DeltaSigma = arg8;
+      BD34301_ModeList[Device.DacAudioFormat].Clock2 = arg1;
+      BD34301_ModeList[Device.DacAudioFormat].AudioIf3  = arg2;
+      BD34301_ModeList[Device.DacAudioFormat].DsdFilter = arg3;
+      BD34301_ModeList[Device.DacAudioFormat].FirFilter1 = arg4;
+      BD34301_ModeList[Device.DacAudioFormat].FirFilter2 = arg5;
+      BD34301_ModeList[Device.DacAudioFormat].DeEmph1 = arg6;
+      BD34301_ModeList[Device.DacAudioFormat].DeEmph2 = arg7;
+      BD34301_ModeList[Device.DacAudioFormat].DeltaSigma = arg8;
       strcpy(buffer, "DAC:CONFIG OK");
       Device.Diag.DacReConfgiurationCnt++;
       SetMasterClock(Device.MasterClock);
-      BD34301_ModeSwitching(&DacConfigurations[Device.DacAudioFormat]);
+      BD34301_ModeSwitching(&BD34301_ModeList[Device.DacAudioFormat]);
   }
 
   /*** ROUTE ***/
