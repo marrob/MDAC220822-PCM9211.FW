@@ -53,7 +53,7 @@ extern "C" {
 
 #define DEVICE_NAME             "MDAC220822"
 #define DEVICE_NAME_SIZE        sizeof(DEVICE_NAME)
-#define DEVICE_FW               "231002_1109"
+#define DEVICE_FW               "231104_1436"
 #define DEVICE_FW_SIZE          sizeof(DEVICDSD_PCME_FW)
 #define DEVICE_PCB              "00"
 #define DEVICE_PCB_SIZE         sizeof(DEVICE_PCB)

@@ -519,6 +519,7 @@ int main(void)
           Device.Diag.SpdifAuidoTypeChangedCnt++;
           flag = 1;
           timestamp = HAL_GetTick();
+          Device.AudioType.Pre = AUDIO_UNKNOWN; //ez kikényszerití a némítás-visszakapcsolást, abban az esetben is ha pattanás/rövid hiba törétn a stream-ben
         }
         if(flag == 1)
         {
